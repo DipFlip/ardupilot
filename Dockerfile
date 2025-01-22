@@ -70,6 +70,36 @@ ENV BUILDLOGS=/tmp/buildlogs
 
 RUN sudo apt-get install -y python3-dev python3-opencv python3-wxgtk4.0 python3-pip python3-matplotlib python3-lxml python3-pygame
 RUN python3 -m pip install PyYAML mavproxy --user
+
+# Add Gazebo package repository
+RUN sudo apt-get update && sudo apt-get install -y wget lsb-release gnupg curl \
+    && sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+
+# Install Gazebo plugin dependencies
+RUN sudo apt-get update && sudo apt-get install -y \
+    libgz-sim8-dev \
+    rapidjson-dev \
+    libopencv-dev \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-libav \
+    gstreamer1.0-gl
+
+# Clone and build ArduPilot Gazebo plugin
+RUN cd /home/${USER_NAME} \
+    && git clone https://github.com/ArduPilot/ardupilot_gazebo \
+    && cd ardupilot_gazebo \
+    && mkdir build && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    && make -j4
+
+# Set Gazebo environment variables
+RUN echo 'export GZ_SIM_SYSTEM_PLUGIN_PATH=/home/${USER_NAME}/ardupilot_gazebo/build:${GZ_SIM_SYSTEM_PLUGIN_PATH}' >> ~/.ardupilot_env \
+    && echo 'export GZ_SIM_RESOURCE_PATH=/home/${USER_NAME}/ardupilot_gazebo/models:/home/${USER_NAME}/ardupilot_gazebo/worlds:${GZ_SIM_RESOURCE_PATH}' >> ~/.ardupilot_env \
+    && echo 'export GZ_VERSION=harmonic' >> ~/.ardupilot_env
+
 # Cleanup
 RUN sudo apt-get clean \
     && sudo rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
