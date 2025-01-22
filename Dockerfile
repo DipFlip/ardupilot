@@ -22,7 +22,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     tzdata \
     git \
     default-jre \
-    bash-completion
+    bash-completion \
+    libcanberra-gtk-module \
+    libcanberra-gtk3-module
 
 COPY Tools/environment_install/install-prereqs-ubuntu.sh /ardupilot/Tools/environment_install/
 COPY Tools/completion /ardupilot/Tools/completion/
@@ -66,6 +68,8 @@ RUN export ARDUPILOT_ENTRYPOINT="/home/${USER_NAME}/ardupilot_entrypoint.sh" \
 # Set the buildlogs directory into /tmp as other directory aren't accessible
 ENV BUILDLOGS=/tmp/buildlogs
 
+RUN sudo apt-get install -y python3-dev python3-opencv python3-wxgtk4.0 python3-pip python3-matplotlib python3-lxml python3-pygame
+RUN python3 -m pip install PyYAML mavproxy --user
 # Cleanup
 RUN sudo apt-get clean \
     && sudo rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
