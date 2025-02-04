@@ -1,5 +1,5 @@
 ARG BASE_IMAGE="ubuntu"
-ARG TAG="22.04"
+ARG TAG="24.04"
 FROM ${BASE_IMAGE}:${TAG}
 WORKDIR /ardupilot
 
@@ -13,15 +13,16 @@ ARG SKIP_AP_COV_ENV=1
 ARG SKIP_AP_GIT_CHECK=1
 ARG DO_AP_STM_ENV=1
 
-RUN groupadd ${USER_NAME} --gid ${USER_GID}\
-    && useradd -l -m ${USER_NAME} -u ${USER_UID} -g ${USER_GID} -s /bin/bash
+# Rename existing ubuntu user (UID 1000) to ardupilot
+RUN usermod -l ${USER_NAME} ubuntu && \
+    usermod -d /home/${USER_NAME} -m ${USER_NAME}
 
 RUN apt-get update && apt-get install --no-install-recommends -y \
     lsb-release \
     sudo \
     tzdata \
     git \
-    default-jre \
+    openjdk-17-jre \
     bash-completion \
     libcanberra-gtk-module \
     libcanberra-gtk3-module
@@ -32,8 +33,6 @@ COPY Tools/completion /ardupilot/Tools/completion/
 # Create non root user for pip
 RUN echo "ardupilot ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER_NAME}
 RUN chmod 0440 /etc/sudoers.d/${USER_NAME}
-
-RUN chown -R ${USER_NAME}:${USER_NAME} /${USER_NAME}
 
 USER ${USER_NAME}
 
@@ -68,17 +67,36 @@ RUN export ARDUPILOT_ENTRYPOINT="/home/${USER_NAME}/ardupilot_entrypoint.sh" \
 # Set the buildlogs directory into /tmp as other directory aren't accessible
 ENV BUILDLOGS=/tmp/buildlogs
 
-RUN sudo apt-get install -y python3-dev python3-opencv python3-wxgtk4.0 python3-pip python3-matplotlib python3-lxml python3-pygame libsfml-dev
-RUN python3 -m pip install PyYAML mavproxy --user
+RUN sudo apt-get install -y \
+    python3-dev \
+    python3-opencv \
+    python3-wxgtk4.0 \
+    python3-pip \
+    python3-matplotlib \
+    python3-lxml \
+    python3-pygame \
+    python3-yaml \
+    python3-future \
+    libsfml-dev \
+    && sudo pip3 install --break-system-packages mavproxy
 
 # Add Gazebo package repository
 RUN sudo apt-get update && sudo apt-get install -y wget lsb-release gnupg curl \
     && sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
 
+# Add ROS 2 repository
+RUN sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+ENV ROS_DISTRO=jazzy
+
 # Install Gazebo plugin dependencies
-RUN sudo apt-get update && sudo apt-get install -y \
+RUN sudo apt-get update && sudo apt-get install --no-install-recommends -y \
     libgz-sim8-dev \
+    gz-sim8-cli \
+    libgz-transport8-dev \
+    ros-${ROS_DISTRO}-ros-gz \
     rapidjson-dev \
     libopencv-dev \
     libgstreamer1.0-dev \
